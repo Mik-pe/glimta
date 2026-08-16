@@ -1,63 +1,153 @@
 # Glimta
 
-A small Rust library and CLI for talking directly to the classic IKEA TRÅDFRI gateway over the local network.
+A local-first Rust library and optional CLI for talking directly to the classic IKEA TRÅDFRI gateway.
 
-Glimta is intentionally local-first. The first target is the old TRÅDFRI gateway, using its CoAP/DTLS interface, without depending on IKEA cloud services, Home Assistant, or a Python runtime.
+Glimta uses the gateway's local CoAP/DTLS interface. It does not require IKEA cloud services, Home Assistant, MQTT, or a Python runtime, and it deliberately leaves deployment, credential storage, and automation policy to the application embedding it.
 
-> Early development: the protocol types and command model are being built first. Network transport and real-gateway integration are next.
+## What it supports
 
-## Goals
+- mDNS discovery of classic TRÅDFRI gateways
+- first-time client provisioning from the printed gateway security code
+- CoAP over DTLS-PSK using the gateway's compatible cipher suite
+- device and group enumeration
+- typed resources that tolerate unknown gateway attributes
+- lights: on/off, brightness, color temperature, hex, XY, and HSB commands
+- switched outlets
+- blinds
+- air purifiers
+- groups
+- cancellable CoAP Observe subscriptions exposed as async Rust streams
+- an optional CLI for discovery, provisioning, inspection, and basic control
 
-- discover a TRÅDFRI gateway on the LAN
-- provision a client identity from the gateway security code
-- communicate over CoAP + DTLS PSK
-- list and observe devices and groups
-- control lights, outlets, blinds, and other supported devices
-- expose a small idiomatic async Rust API suitable for home automation daemons
-- keep the protocol layer testable without physical hardware
+The protocol model is independent from network I/O, so parsing and command generation can be tested without physical hardware.
 
-## First vertical slice
+## Library usage
 
-```text
-find gateway -> authenticate -> list devices -> inspect light -> on/off/dim -> observe state
+Enable the default `network` feature for discovery and gateway communication:
+
+```toml
+[dependencies]
+glimta = { git = "https://github.com/Mik-pe/glimta" }
 ```
 
-## Planned API
+Provision credentials once and hand the returned value to your own credential store:
 
-```rust,ignore
-let gateway = glimta::Gateway::discover().await?;
-let session = gateway.authenticate(security_code).await?;
+```rust,no_run
+use std::time::Duration;
 
-for device in session.devices().await? {
-    println!("{}: {:?}", device.name(), device.kind());
+use glimta::Gateway;
+
+# async fn example(security_code: &str) -> glimta::Result<()> {
+let gateway = Gateway::discover(Duration::from_secs(5)).await?;
+let credentials = gateway.provision(security_code).await?;
+
+// Persist `credentials` using the embedding application's secret-storage policy.
+let client = gateway.connect(credentials);
+
+for device in client.devices().await? {
+    println!("{}: {:?}", device.name(), device.capabilities());
 }
+# Ok(())
+# }
+```
 
-session.light(light_id).set_brightness(42).await?;
+Connect later with previously provisioned credentials:
+
+```rust,no_run
+use std::{net::IpAddr, str::FromStr};
+
+use glimta::{Credentials, Gateway};
+
+# async fn example() -> glimta::Result<()> {
+let gateway = Gateway::new(IpAddr::from_str("192.0.2.10").unwrap());
+let credentials = Credentials::new("example-client", "example-pre-shared-key")?;
+let client = gateway.connect(credentials);
+
+client.set_light_state(65_537, true).await?;
+client.set_light_brightness(65_537, 128, Some(10)).await?;
+# Ok(())
+# }
+```
+
+`192.0.2.10` and the credentials above are documentation-only placeholders.
+
+### Observe changes
+
+```rust,no_run
+# async fn example(client: glimta::Client, device_id: u32) -> glimta::Result<()> {
+let mut updates = client.observe_device(device_id).await?;
+
+while let Some(update) = updates.recv().await {
+    let device = update?;
+    println!("{} changed", device.name());
+}
+# Ok(())
+# }
+```
+
+Dropping an observation, or calling `cancel()`, sends an explicit CoAP Observe termination.
+
+## Core-only usage
+
+Applications that only need protocol types and command construction can disable networking:
+
+```toml
+[dependencies]
+glimta = { git = "https://github.com/Mik-pe/glimta", default-features = false }
+```
+
+That keeps CoAP, DTLS, Tokio, and mDNS out of the dependency graph.
+
+## CLI
+
+Build or install the optional CLI with the `cli` feature:
+
+```bash
+cargo run --features cli -- discover
+cargo run --features cli -- provision --credentials ./glimta-credentials.json
+cargo run --features cli -- devices --credentials ./glimta-credentials.json
+```
+
+The provisioning command reads the gateway security code without echoing it and writes the resulting credential file with owner-only permissions on Unix. Callers remain free to use a different secret store when using the library API.
+
+A gateway address can be supplied explicitly instead of using mDNS:
+
+```bash
+cargo run --features cli -- devices \
+  --gateway 192.0.2.10 \
+  --credentials ./glimta-credentials.json
 ```
 
 ## Architecture
 
-The crate is being split by responsibility rather than mirroring pytradfri class-for-class:
-
 - `protocol` contains TRÅDFRI endpoint and attribute identifiers.
-- `model` owns typed representations of gateway resources.
-- `command` builds protocol writes without doing any I/O.
-- the upcoming transport layer will own CoAP, DTLS, discovery, retries, and observation.
+- `model` owns typed gateway resources while preserving unknown fields.
+- `command` builds validated wire commands without doing I/O.
+- `transport` owns CoAP over DTLS-PSK.
+- `discovery` owns mDNS gateway discovery.
+- `client` provides the async public API and Observe streams.
 
-This makes captured gateway payloads usable as fixtures and keeps the wire protocol independent from whichever async transport implementation Glimta settles on.
+Bulk reads reuse a read-only DTLS session. Writes open fresh sessions because classic gateways have historically behaved differently when multiple PUT operations reuse one connection.
 
-## Protocol references
+## Compatibility references
 
-Glimta is informed by the behaviour documented and exercised by:
+Glimta is a new implementation informed by two existing open-source projects:
 
-- `home-assistant-libs/pytradfri`, used as the broad behaviour reference.
-- `tirithen/tradfri_gateway`, used as a Rust/TRÅDFRI interoperability reference.
+- `home-assistant-libs/pytradfri` for broad classic-gateway behaviour and resource coverage.
+- `tirithen/tradfri_gateway` for prior Rust interoperability knowledge.
 
-Glimta is a new implementation and does not require either project at runtime.
+Neither project is required at runtime.
 
-## Status
+## Development
 
-The classic TRÅDFRI gateway is discontinued hardware. Glimta exists to keep useful hardware useful and to provide a clean Rust building block for local home automation.
+```bash
+cargo fmt -- --check
+cargo test --no-default-features --all-targets
+cargo test --all-features --all-targets
+cargo clippy --all-features --all-targets -- -D warnings
+```
+
+Real-gateway interoperability is intentionally separate from unit tests because CI does not assume access to local hardware.
 
 ## License
 

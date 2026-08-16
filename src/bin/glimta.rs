@@ -165,10 +165,16 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
         CliCommand::LightOn { connection, device } => {
-            client(&connection).await?.set_light_state(device, true).await?;
+            client(&connection)
+                .await?
+                .set_light_state(device, true)
+                .await?;
         }
         CliCommand::LightOff { connection, device } => {
-            client(&connection).await?.set_light_state(device, false).await?;
+            client(&connection)
+                .await?
+                .set_light_state(device, false)
+                .await?;
         }
         CliCommand::LightBrightness {
             connection,
@@ -185,7 +191,10 @@ async fn run(cli: Cli) -> Result<()> {
             device,
             on,
         } => {
-            client(&connection).await?.set_socket_state(device, on).await?;
+            client(&connection)
+                .await?
+                .set_socket_state(device, on)
+                .await?;
         }
         CliCommand::Blind {
             connection,
@@ -198,7 +207,10 @@ async fn run(cli: Cli) -> Result<()> {
                 .await?;
         }
         CliCommand::PurifierAuto { connection, device } => {
-            client(&connection).await?.set_air_purifier_auto(device).await?;
+            client(&connection)
+                .await?
+                .set_air_purifier_auto(device)
+                .await?;
         }
         CliCommand::PurifierOff { connection, device } => {
             client(&connection)

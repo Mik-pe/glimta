@@ -66,7 +66,11 @@ fn parses_multiple_device_capabilities_and_preserves_unknown_fields() {
     let device: Device = serde_json::from_str(raw).expect("fixture should deserialize");
     assert_eq!(
         device.capabilities(),
-        vec![DeviceKind::Socket, DeviceKind::Blind, DeviceKind::AirPurifier]
+        vec![
+            DeviceKind::Socket,
+            DeviceKind::Blind,
+            DeviceKind::AirPurifier
+        ]
     );
     assert!(device.sockets[0].is_on());
     assert_eq!(device.blinds[0].current_position, 47.5);

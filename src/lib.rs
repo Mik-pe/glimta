@@ -12,11 +12,11 @@ pub mod model;
 pub mod protocol;
 
 #[cfg(feature = "network")]
+pub mod client;
+#[cfg(feature = "network")]
 mod discovery;
 #[cfg(feature = "network")]
 mod transport;
-#[cfg(feature = "network")]
-pub mod client;
 
 pub use command::{Command, CommandError, Method};
 pub use credentials::Credentials;

@@ -48,11 +48,7 @@ pub(crate) async fn execute_on(client: &DtlsClient, command: &Command) -> Result
         Method::Put => CoapMethod::Put,
         Method::Post => CoapMethod::Post,
     };
-    let body = command
-        .body
-        .as_ref()
-        .map(serde_json::to_vec)
-        .transpose()?;
+    let body = command.body.as_ref().map(serde_json::to_vec).transpose()?;
     let request = RequestBuilder::new(&command.path, method)
         .data(body)
         .confirmable(true)

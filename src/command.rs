@@ -320,10 +320,7 @@ pub fn set_air_purifier_auto(device_id: u32) -> Command {
 /// # Errors
 ///
 /// Returns an error when `speed` is outside `2..=50`.
-pub fn set_air_purifier_fan_speed(
-    device_id: u32,
-    speed: u8,
-) -> Result<Command, CommandError> {
+pub fn set_air_purifier_fan_speed(device_id: u32, speed: u8) -> Result<Command, CommandError> {
     if !(protocol::AIR_PURIFIER_FAN_RANGE.0..=protocol::AIR_PURIFIER_FAN_RANGE.1).contains(&speed) {
         return Err(CommandError::AirPurifierFanSpeed(speed));
     }

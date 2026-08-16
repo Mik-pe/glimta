@@ -2,7 +2,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 
-use crate::{protocol, Gateway, Error, Result};
+use crate::{Error, Gateway, Result, protocol};
 
 pub(crate) async fn discover_gateway(timeout: Duration) -> Result<Gateway> {
     let daemon = ServiceDaemon::new()?;

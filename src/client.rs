@@ -14,9 +14,9 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
-    command, discovery,
+    AirPurifier, Blind, Command, Credentials, Device, Error, Result, Socket, command, discovery,
     model::{Group, ProvisionedIdentity},
-    protocol, transport, AirPurifier, Blind, Command, Credentials, Device, Error, Result, Socket,
+    protocol, transport,
 };
 
 /// Network behavior for a connected client.
@@ -83,11 +83,7 @@ impl Gateway {
 
     /// Provision a new random client identity with the printed gateway security code.
     pub async fn provision(&self, security_code: &str) -> Result<Credentials> {
-        let identity = format!(
-            "glimta-{:016x}{:016x}",
-            random::<u64>(),
-            random::<u64>()
-        );
+        let identity = format!("glimta-{:016x}{:016x}", random::<u64>(), random::<u64>());
         self.provision_with_identity(security_code, &identity).await
     }
 
@@ -105,7 +101,8 @@ impl Gateway {
             ClientOptions::default().retries,
         )
         .await?;
-        let payload = transport::execute_on(&client, &command::provision_identity(identity)).await?;
+        let payload =
+            transport::execute_on(&client, &command::provision_identity(identity)).await?;
         let provisioned: ProvisionedIdentity = serde_json::from_slice(&payload)?;
         Credentials::new(identity, provisioned.pre_shared_key)
     }
@@ -206,7 +203,8 @@ impl Client {
     }
 
     pub async fn set_light_state(&self, device_id: u32, on: bool) -> Result<()> {
-        self.execute_unit(command::set_light_state(device_id, on)).await
+        self.execute_unit(command::set_light_state(device_id, on))
+            .await
     }
 
     pub async fn set_light_brightness(
@@ -286,7 +284,8 @@ impl Client {
     }
 
     pub async fn set_socket_state(&self, device_id: u32, on: bool) -> Result<()> {
-        self.execute_unit(command::set_socket_state(device_id, on)).await
+        self.execute_unit(command::set_socket_state(device_id, on))
+            .await
     }
 
     pub async fn set_blind_position(&self, device_id: u32, position: u8) -> Result<()> {
@@ -328,7 +327,8 @@ impl Client {
     }
 
     pub async fn set_group_state(&self, group_id: u32, on: bool) -> Result<()> {
-        self.execute_unit(command::set_group_state(group_id, on)).await
+        self.execute_unit(command::set_group_state(group_id, on))
+            .await
     }
 
     pub async fn set_group_brightness(
@@ -389,9 +389,9 @@ impl Client {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let cancel = client
             .observe(&path, move |message| {
-                let parsed = message
-                    .map_err(Error::Io)
-                    .and_then(|message| serde_json::from_slice(&message.payload).map_err(Error::from));
+                let parsed = message.map_err(Error::Io).and_then(|message| {
+                    serde_json::from_slice(&message.payload).map_err(Error::from)
+                });
                 let _ = sender.send(parsed);
             })
             .await?;

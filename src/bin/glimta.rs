@@ -119,51 +119,14 @@ async fn main() {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        CliCommand::Discover => {
-            let gateway = Gateway::discover(Duration::from_secs(5)).await?;
-            println!("{}", gateway.address());
-        }
+        CliCommand::Discover => discover().await?,
         CliCommand::Provision {
             gateway,
             credentials,
             identity,
-        } => {
-            let gateway = resolve_gateway(gateway.as_deref()).await?;
-            let security_code = rpassword::prompt_password("Gateway security code: ")?;
-            let provisioned = if let Some(identity) = identity {
-                gateway
-                    .provision_with_identity(&security_code, &identity)
-                    .await?
-            } else {
-                gateway.provision(&security_code).await?
-            };
-            write_credentials(&credentials, &provisioned)?;
-            println!("Credentials written to {}", credentials.display());
-        }
-        CliCommand::Devices(connection) => {
-            let (gateway, credentials) = load_connection(&connection).await?;
-            for device in gateway.connect(credentials).devices().await? {
-                println!(
-                    "{}\t{}\t{:?}\treachable={:?}",
-                    device.id,
-                    device.name(),
-                    device.capabilities(),
-                    device.is_reachable()
-                );
-            }
-        }
-        CliCommand::Groups(connection) => {
-            let (gateway, credentials) = load_connection(&connection).await?;
-            for group in gateway.connect(credentials).groups().await? {
-                println!(
-                    "{}\t{}\ton={}\tmembers={:?}",
-                    group.id,
-                    group.name(),
-                    group.is_on(),
-                    group.member_ids()
-                );
-            }
-        }
+        } => provision(gateway.as_deref(), &credentials, identity.as_deref()).await?,
+        CliCommand::Devices(connection) => list_devices(&connection).await?,
+        CliCommand::Groups(connection) => list_groups(&connection).await?,
         CliCommand::LightOn { connection, device } => {
             client(&connection)
                 .await?
@@ -228,6 +191,55 @@ async fn run(cli: Cli) -> Result<()> {
                 .set_air_purifier_fan_speed(device, speed)
                 .await?;
         }
+    }
+    Ok(())
+}
+
+async fn discover() -> Result<()> {
+    let gateway = Gateway::discover(Duration::from_secs(5)).await?;
+    println!("{}", gateway.address());
+    Ok(())
+}
+
+async fn provision(gateway: Option<&str>, path: &Path, identity: Option<&str>) -> Result<()> {
+    let gateway = resolve_gateway(gateway).await?;
+    let security_code = rpassword::prompt_password("Gateway security code: ")?;
+    let credentials = if let Some(identity) = identity {
+        gateway
+            .provision_with_identity(&security_code, identity)
+            .await?
+    } else {
+        gateway.provision(&security_code).await?
+    };
+    write_credentials(path, &credentials)?;
+    println!("Credentials written to {}", path.display());
+    Ok(())
+}
+
+async fn list_devices(connection: &ConnectionArgs) -> Result<()> {
+    let (gateway, credentials) = load_connection(connection).await?;
+    for device in gateway.connect(credentials).devices().await? {
+        println!(
+            "{}\t{}\t{:?}\treachable={:?}",
+            device.id,
+            device.name(),
+            device.capabilities(),
+            device.is_reachable()
+        );
+    }
+    Ok(())
+}
+
+async fn list_groups(connection: &ConnectionArgs) -> Result<()> {
+    let (gateway, credentials) = load_connection(connection).await?;
+    for group in gateway.connect(credentials).groups().await? {
+        println!(
+            "{}\t{}\ton={}\tmembers={:?}",
+            group.id,
+            group.name(),
+            group.is_on(),
+            group.member_ids()
+        );
     }
     Ok(())
 }

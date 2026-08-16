@@ -3,3 +3,5 @@ Cargo.lock
 .env
 *.log
 .DS_Store
+glimta-credentials.json
+*.glimta-credentials.json

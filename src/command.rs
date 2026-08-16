@@ -102,6 +102,15 @@ pub fn set_light_state(device_id: u32, on: bool) -> Command {
     )
 }
 
+/// Build a light brightness write.
+///
+/// `transition_time` is expressed in tenths of a second, matching the gateway
+/// protocol.
+///
+/// # Errors
+///
+/// Returns [`CommandError::Brightness`] when `brightness` is outside the
+/// gateway's accepted `0..=254` range.
 pub fn set_light_brightness(
     device_id: u32,
     brightness: u16,
@@ -119,6 +128,15 @@ pub fn set_light_brightness(
     Ok(light_put(device_id, values))
 }
 
+/// Build a white-spectrum color-temperature write.
+///
+/// `transition_time` is expressed in tenths of a second, matching the gateway
+/// protocol.
+///
+/// # Errors
+///
+/// Returns [`CommandError::ColorTemperature`] when `mireds` is outside the
+/// classic IKEA bulb range of `250..=454`.
 pub fn set_light_color_temperature(
     device_id: u32,
     mireds: u16,

@@ -73,7 +73,7 @@ fn parses_multiple_device_capabilities_and_preserves_unknown_fields() {
         ]
     );
     assert!(device.sockets[0].is_on());
-    assert_eq!(device.blinds[0].current_position, 47.5);
+    assert!((device.blinds[0].current_position - 47.5).abs() < f64::EPSILON);
     assert_eq!(device.air_purifiers[0].is_auto_mode(), Some(true));
     assert_eq!(device.air_purifiers[0].controls_locked(), Some(true));
     assert_eq!(device.air_purifiers[0].leds_off(), Some(false));

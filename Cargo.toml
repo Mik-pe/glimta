@@ -10,10 +10,35 @@ readme = "README.md"
 keywords = ["ikea", "tradfri", "coap", "home-automation", "iot"]
 categories = ["api-bindings", "network-programming"]
 
+[features]
+default = ["network"]
+network = [
+    "dep:coap",
+    "dep:futures-core",
+    "dep:mdns-sd",
+    "dep:rand",
+    "dep:tokio",
+    "dep:webrtc-dtls",
+]
+cli = ["network", "dep:clap", "dep:rpassword"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+coap = { version = "0.27", default-features = false, features = ["dtls"], optional = true }
+futures-core = { version = "0.3", optional = true }
+mdns-sd = { version = "0.20", optional = true }
+rand = { version = "0.9", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"], optional = true }
+webrtc-dtls = { version = "0.8", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+rpassword = { version = "7", optional = true }
+
+[[bin]]
+name = "glimta"
+path = "src/bin/glimta.rs"
+required-features = ["cli"]
 
 [lints.rust]
 unsafe_code = "forbid"

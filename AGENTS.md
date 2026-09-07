@@ -40,6 +40,9 @@ The primary compatibility target is the classic TRÅDFRI gateway. The library sh
 - Validate command ranges before network I/O.
 - Add fixture tests for every newly supported device type before adding higher-level control helpers.
 - Unknown numeric attributes must not make otherwise useful resources fail to deserialize.
+- Keep CoAP protocol handling independent from the concrete DTLS implementation. Do not enable a dependency's bundled legacy DTLS stack just for convenience.
+- Observe buffering must stay bounded. State observations may discard stale intermediate snapshots, but lag or transport loss must remain visible to callers.
+- Automatic reconnect is opt-in library behavior with bounded backoff; automation policy remains the caller's responsibility.
 
 ## Quality bar
 
@@ -48,8 +51,13 @@ Before merging Rust changes, run:
 ```bash
 cargo fmt -- --check
 cargo test --no-default-features --all-targets
+cargo test --all-targets
 cargo test --all-features --all-targets
 cargo clippy --all-features --all-targets -- -D warnings
+cargo generate-lockfile
+cargo audit
 ```
+
+The default feature set is a first-class build target. Do not rely on `--all-features` to hide missing optional dependency wiring.
 
 Public API changes should include tests and a short README update when user-visible behaviour changes.

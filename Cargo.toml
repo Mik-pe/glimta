@@ -13,12 +13,14 @@ categories = ["api-bindings", "network-programming"]
 [features]
 default = ["network"]
 network = [
+    "dep:async-trait",
     "dep:coap",
+    "dep:dtls",
     "dep:futures-core",
     "dep:mdns-sd",
     "dep:rand",
     "dep:tokio",
-    "dep:webrtc-dtls",
+    "dep:tokio-stream",
 ]
 cli = ["network", "dep:clap", "dep:rpassword"]
 
@@ -26,12 +28,14 @@ cli = ["network", "dep:clap", "dep:rpassword"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-coap = { version = "0.27", default-features = false, features = ["dtls"], optional = true }
+async-trait = { version = "0.1", optional = true }
+coap = { version = "0.28", default-features = false, optional = true }
+dtls = { version = "0.17.2", optional = true }
 futures-core = { version = "0.3", optional = true }
 mdns-sd = { version = "0.20", optional = true }
 rand = { version = "0.9", optional = true }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"], optional = true }
-webrtc-dtls = { version = "0.8", optional = true }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"], optional = true }
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 rpassword = { version = "7", optional = true }
 

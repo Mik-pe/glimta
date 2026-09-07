@@ -25,6 +25,8 @@ The protocol model is independent from network I/O, so parsing and command gener
 
 ## Library usage
 
+Glimta's minimum supported Rust version is 1.88. The MSRV is tested explicitly in CI so dependency security fixes cannot silently fall back to older vulnerable versions.
+
 Enable the default `network` feature for discovery and gateway communication:
 
 ```toml
@@ -212,6 +214,7 @@ Neither project is required at runtime.
 ```bash
 cargo fmt -- --check
 cargo test --no-default-features --all-targets
+cargo +1.88 test --all-features --all-targets
 cargo test --all-targets
 cargo test --all-features --all-targets
 cargo clippy --all-features --all-targets -- -D warnings
@@ -219,7 +222,7 @@ cargo generate-lockfile
 cargo audit
 ```
 
-CI tests core-only, default, and all-feature builds separately and audits the resolved dependency graph for RustSec advisories.
+CI tests the declared Rust 1.88 MSRV, core-only, default, and all-feature builds separately and audits the resolved dependency graph for RustSec advisories.
 
 Real-gateway interoperability is intentionally separate from unit tests because CI does not assume access to local hardware.
 

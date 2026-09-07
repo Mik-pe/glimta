@@ -24,7 +24,9 @@ pub enum Error {
     EmptyCredential(&'static str),
     #[error("an observe command must be started with an observation API")]
     ObserveCommandRequiresSubscription,
-    #[error("an observation dropped {dropped} stale update(s); the next item is the newest snapshot")]
+    #[error(
+        "an observation dropped {dropped} stale update(s); the next item is the newest snapshot"
+    )]
     ObservationLagged { dropped: u64 },
     #[error("an observation payload could not be decoded: {0}")]
     ObservationDecode(String),

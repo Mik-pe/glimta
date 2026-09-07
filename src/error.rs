@@ -24,6 +24,19 @@ pub enum Error {
     EmptyCredential(&'static str),
     #[error("an observe command must be started with an observation API")]
     ObserveCommandRequiresSubscription,
+    #[error("an observation dropped {dropped} stale update(s); the next item is the newest snapshot")]
+    ObservationLagged { dropped: u64 },
+    #[error("an observation payload could not be decoded: {0}")]
+    ObservationDecode(String),
+    #[error("an observation transport failed: {message}")]
+    ObservationTransport {
+        kind: std::io::ErrorKind,
+        message: String,
+    },
+    #[error("an observation ended; a resilient observation will reconnect")]
+    ObservationEnded,
+    #[error("an observation reconnect attempt failed: {0}")]
+    ObservationReconnect(String),
 }
 
 /// Glimta result type.

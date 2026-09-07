@@ -6,17 +6,19 @@ Glimta uses the gateway's local CoAP/DTLS interface. It does not require IKEA cl
 
 ## What it supports
 
-- mDNS discovery of classic TRÅDFRI gateways
+- deterministic mDNS discovery of one or more classic TRÅDFRI gateways
 - first-time client provisioning from the printed gateway security code
 - CoAP over DTLS-PSK using the gateway's compatible cipher suite
 - device and group enumeration
+- strict and best-effort bulk reads
 - typed resources that tolerate unknown gateway attributes
 - lights: on/off, brightness, color temperature, hex, XY, and HSB commands
 - switched outlets
 - blinds
 - air purifiers
 - groups
-- cancellable CoAP Observe subscriptions exposed as async Rust streams
+- bounded, cancellable CoAP Observe subscriptions exposed as async Rust streams
+- opt-in resilient observations with bounded reconnect backoff
 - an optional CLI for discovery, provisioning, inspection, and basic control
 
 The protocol model is independent from network I/O, so parsing and command generation can be tested without physical hardware.
@@ -51,6 +53,22 @@ for device in client.devices().await? {
 # }
 ```
 
+If several gateways may exist, discover them all and choose explicitly. Results are de-duplicated and returned in deterministic hostname order:
+
+```rust,no_run
+use std::time::Duration;
+
+use glimta::Gateway;
+
+# async fn example() -> glimta::Result<()> {
+let gateways = Gateway::discover_all(Duration::from_secs(5)).await?;
+for gateway in gateways {
+    println!("{:?}: {}", gateway.hostname(), gateway.address());
+}
+# Ok(())
+# }
+```
+
 Connect later with previously provisioned credentials:
 
 ```rust,no_run
@@ -71,21 +89,68 @@ client.set_light_brightness(65_537, 128, Some(10)).await?;
 
 `192.0.2.10` and the credentials above are documentation-only placeholders.
 
+### Best-effort reads
+
+`devices()` and `groups()` remain strict: they return on the first resource that cannot be fetched or decoded. Applications that should keep healthy resources when one device is offline or malformed can use the best-effort variants:
+
+```rust,no_run
+# async fn example(client: glimta::Client) -> glimta::Result<()> {
+let snapshot = client.devices_best_effort().await?;
+
+for device in snapshot.items {
+    println!("{}: {}", device.id, device.name());
+}
+for failure in snapshot.failures {
+    eprintln!("device {} could not be read: {}", failure.id, failure.error);
+}
+# Ok(())
+# }
+```
+
+Failure to enumerate the resource IDs or establish the shared read session still fails the call. Per-resource failures are isolated only after enumeration succeeds.
+
 ### Observe changes
+
+A direct observation is cancellable and bounded. The channel keeps the newest snapshot instead of growing without limit. If the consumer falls behind, it receives `Error::ObservationLagged` and can then continue with the newest state.
 
 ```rust,no_run
 # async fn example(client: glimta::Client, device_id: u32) -> glimta::Result<()> {
 let mut updates = client.observe_device(device_id).await?;
 
 while let Some(update) = updates.recv().await {
-    let device = update?;
-    println!("{} changed", device.name());
+    match update {
+        Ok(device) => println!("{} changed", device.name()),
+        Err(glimta::Error::ObservationLagged { dropped }) => {
+            eprintln!("skipped {dropped} stale update(s)");
+        }
+        Err(error) => return Err(error),
+    }
 }
 # Ok(())
 # }
 ```
 
 Dropping an observation, or calling `cancel()`, sends an explicit CoAP Observe termination.
+
+For long-lived consumers, resilient observation is opt-in. It creates a new DTLS/CoAP observation after transport loss or unexpected termination and retries with bounded exponential backoff. Transient failures remain visible as stream errors instead of being hidden:
+
+```rust,no_run
+use glimta::ReconnectOptions;
+
+# async fn example(client: glimta::Client, device_id: u32) -> glimta::Result<()> {
+let mut updates = client
+    .observe_device_resilient(device_id, ReconnectOptions::default())
+    .await?;
+
+while let Some(update) = updates.recv().await {
+    match update {
+        Ok(device) => println!("{} changed", device.name()),
+        Err(error) => eprintln!("observation is recovering: {error}"),
+    }
+}
+# Ok(())
+# }
+```
 
 ## Core-only usage
 
@@ -108,6 +173,8 @@ cargo run --features cli -- provision --credentials ./glimta-credentials.json
 cargo run --features cli -- devices --credentials ./glimta-credentials.json
 ```
 
+`discover` prints every matching gateway in deterministic order. Device and group listing use best-effort reads, so a single broken resource is reported on stderr without hiding healthy entries.
+
 The provisioning command reads the gateway security code without echoing it and writes the resulting credential file with owner-only permissions on Unix. Callers remain free to use a different secret store when using the library API.
 
 A gateway address can be supplied explicitly instead of using mDNS:
@@ -127,6 +194,8 @@ cargo run --features cli -- devices \
 - `discovery` owns mDNS gateway discovery.
 - `client` provides the async public API and Observe streams.
 
+Glimta uses the CoAP crate without its bundled DTLS feature and supplies a small custom client transport over the maintained `dtls` crate. This keeps CoAP protocol handling independent from the concrete DTLS implementation and avoids pulling the CoAP crate's legacy DTLS dependency graph into Glimta.
+
 Bulk reads reuse a read-only DTLS session. Writes open fresh sessions because classic gateways have historically behaved differently when multiple PUT operations reuse one connection.
 
 ## Compatibility references
@@ -143,9 +212,14 @@ Neither project is required at runtime.
 ```bash
 cargo fmt -- --check
 cargo test --no-default-features --all-targets
+cargo test --all-targets
 cargo test --all-features --all-targets
 cargo clippy --all-features --all-targets -- -D warnings
+cargo generate-lockfile
+cargo audit
 ```
+
+CI tests core-only, default, and all-feature builds separately and audits the resolved dependency graph for RustSec advisories.
 
 Real-gateway interoperability is intentionally separate from unit tests because CI does not assume access to local hardware.
 

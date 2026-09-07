@@ -19,7 +19,15 @@ jobs:
         run: cargo fmt -- --check
       - name: Test core only
         run: cargo test --no-default-features --all-targets
+      - name: Test default features
+        run: cargo test --all-targets
       - name: Test all features
         run: cargo test --all-features --all-targets
       - name: Clippy
         run: cargo clippy --all-features --all-targets -- -D warnings
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: |
+          cargo generate-lockfile
+          cargo audit

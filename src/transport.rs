@@ -25,12 +25,19 @@ pub(crate) struct DtlsTransport {
 #[async_trait]
 impl ClientTransport for DtlsTransport {
     async fn recv(&self, buf: &mut [u8]) -> io::Result<(usize, Option<SocketAddr>)> {
-        let read = self.conn.read(buf, None).await.map_err(dtls_io_error)?;
+        let read = self
+            .conn
+            .read(buf, None)
+            .await
+            .map_err(|error| dtls_io_error(&error))?;
         Ok((read, Some(self.remote_addr)))
     }
 
     async fn send(&self, buf: &[u8]) -> io::Result<usize> {
-        self.conn.write(buf, None).await.map_err(dtls_io_error)
+        self.conn
+            .write(buf, None)
+            .await
+            .map_err(|error| dtls_io_error(&error))
     }
 }
 
@@ -66,7 +73,7 @@ pub(crate) async fn open_client(
     )
     .await
     .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "DTLS handshake timed out"))?
-    .map_err(dtls_io_error)?;
+    .map_err(|error| dtls_io_error(&error))?;
 
     let transport = DtlsTransport {
         conn: Arc::new(conn),
@@ -104,7 +111,7 @@ pub(crate) async fn execute_on(client: &DtlsClient, command: &Command) -> Result
     Ok(response.message.payload)
 }
 
-fn dtls_io_error(error: dtls::Error) -> io::Error {
+fn dtls_io_error(error: &dtls::Error) -> io::Error {
     io::Error::other(error.to_string())
 }
 

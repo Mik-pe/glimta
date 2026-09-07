@@ -62,12 +62,7 @@ pub(crate) async fn open_client(
 
     let conn = tokio::time::timeout(
         request_timeout,
-        DTLSConn::new(
-            Arc::new(socket),
-            build_dtls_config(credentials),
-            true,
-            None,
-        ),
+        DTLSConn::new(Arc::new(socket), build_dtls_config(credentials), true, None),
     )
     .await
     .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "DTLS handshake timed out"))?
@@ -123,7 +118,10 @@ mod tests {
         let config = build_dtls_config(&credentials);
 
         assert!(config.psk.is_some());
-        assert_eq!(config.psk_identity_hint.as_deref(), Some(b"client".as_slice()));
+        assert_eq!(
+            config.psk_identity_hint.as_deref(),
+            Some(b"client".as_slice())
+        );
         assert_eq!(
             config.cipher_suites,
             vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8]

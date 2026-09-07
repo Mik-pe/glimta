@@ -562,15 +562,7 @@ impl Client {
         let client = self.clone();
 
         let task = tokio::spawn(async move {
-            supervise_observation(
-                client,
-                path,
-                initial,
-                reconnect,
-                sender,
-                &mut cancelled,
-            )
-            .await;
+            supervise_observation(client, path, initial, reconnect, sender, &mut cancelled).await;
         });
 
         Ok(Observation {

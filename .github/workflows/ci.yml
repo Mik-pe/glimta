@@ -2,12 +2,21 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.88
+      - name: Test declared MSRV
+        run: cargo test --all-features --all-targets
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +28,15 @@ jobs:
         run: cargo fmt -- --check
       - name: Test core only
         run: cargo test --no-default-features --all-targets
+      - name: Test default features
+        run: cargo test --all-targets
       - name: Test all features
         run: cargo test --all-features --all-targets
       - name: Clippy
         run: cargo clippy --all-features --all-targets -- -D warnings
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: |
+          cargo generate-lockfile
+          cargo audit

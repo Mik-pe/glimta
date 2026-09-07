@@ -18,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum CliCommand {
-    /// Discover a gateway through mDNS.
+    /// Discover gateways through mDNS.
     Discover,
     /// Provision long-lived credentials using the printed gateway security code.
     Provision {
@@ -196,8 +196,13 @@ async fn run(cli: Cli) -> Result<()> {
 }
 
 async fn discover() -> Result<()> {
-    let gateway = Gateway::discover(Duration::from_secs(5)).await?;
-    println!("{}", gateway.address());
+    for gateway in Gateway::discover_all(Duration::from_secs(5)).await? {
+        println!(
+            "{}\t{}",
+            gateway.hostname().unwrap_or("TRADFRI gateway"),
+            gateway.address()
+        );
+    }
     Ok(())
 }
 
@@ -218,7 +223,8 @@ async fn provision(gateway: Option<&str>, path: &Path, identity: Option<&str>) -
 
 async fn list_devices(connection: &ConnectionArgs) -> Result<()> {
     let (gateway, credentials) = load_connection(connection).await?;
-    for device in gateway.connect(credentials).devices().await? {
+    let mut read = gateway.connect(credentials).devices_best_effort().await?;
+    for device in &read.items {
         println!(
             "{}\t{}\t{:?}\treachable={:?}",
             device.id,
@@ -227,12 +233,19 @@ async fn list_devices(connection: &ConnectionArgs) -> Result<()> {
             device.is_reachable()
         );
     }
+    for failure in &read.failures {
+        eprintln!("device {}\tERROR\t{}", failure.id, failure.error);
+    }
+    if read.items.is_empty() && !read.failures.is_empty() {
+        return Err(read.failures.remove(0).error);
+    }
     Ok(())
 }
 
 async fn list_groups(connection: &ConnectionArgs) -> Result<()> {
     let (gateway, credentials) = load_connection(connection).await?;
-    for group in gateway.connect(credentials).groups().await? {
+    let mut read = gateway.connect(credentials).groups_best_effort().await?;
+    for group in &read.items {
         println!(
             "{}\t{}\ton={}\tmembers={:?}",
             group.id,
@@ -240,6 +253,12 @@ async fn list_groups(connection: &ConnectionArgs) -> Result<()> {
             group.is_on(),
             group.member_ids()
         );
+    }
+    for failure in &read.failures {
+        eprintln!("group {}\tERROR\t{}", failure.id, failure.error);
+    }
+    if read.items.is_empty() && !read.failures.is_empty() {
+        return Err(read.failures.remove(0).error);
     }
     Ok(())
 }

@@ -46,11 +46,14 @@ The primary compatibility target is the classic TRÅDFRI gateway. The library sh
 
 ## Quality bar
 
+The declared MSRV is Rust 1.88. Security fixes take precedence over retaining an older MSRV when the patched dependency floor has moved, and CI must test the declared MSRV explicitly.
+
 Before merging Rust changes, run:
 
 ```bash
 cargo fmt -- --check
 cargo test --no-default-features --all-targets
+cargo +1.88 test --all-features --all-targets
 cargo test --all-targets
 cargo test --all-features --all-targets
 cargo clippy --all-features --all-targets -- -D warnings
@@ -58,6 +61,6 @@ cargo generate-lockfile
 cargo audit
 ```
 
-The default feature set is a first-class build target. Do not rely on `--all-features` to hide missing optional dependency wiring.
+The default feature set is a first-class build target. Do not rely on `--all-features` to hide missing optional dependency wiring. Do not add RustSec allowlists merely to preserve an obsolete dependency or MSRV.
 
 Public API changes should include tests and a short README update when user-visible behaviour changes.

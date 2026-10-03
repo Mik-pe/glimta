@@ -53,3 +53,16 @@ cargo clippy --all-features --all-targets -- -D warnings
 ```
 
 Public API changes should include tests and a short README update when user-visible behaviour changes.
+
+## Git delivery
+
+Use ordinary merge commits for pull requests and branch updates. Never rebase,
+squash-merge, or force-push. Fetch the current base and merge it into the topic
+branch when conflicts, integration changes, or branch protection require it;
+do not update every branch merely because another PR landed. Verify the current
+PR head before merging.
+
+CI reuses a successful PR run on `main` only when its recorded checkout tree
+matches the merged tree in the same workflow. Missing, expired, incomplete, or
+failed evidence runs the checks. Direct pushes, manual runs and schedules still
+run verification; release and deployment workflows keep their own gates.

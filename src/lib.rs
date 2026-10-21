@@ -26,4 +26,6 @@ pub use model::{
 };
 
 #[cfg(feature = "network")]
-pub use client::{Client, ClientOptions, Gateway, Observation};
+pub use client::{
+    BulkRead, Client, ClientOptions, Gateway, Observation, ReconnectOptions, ResourceFailure,
+};

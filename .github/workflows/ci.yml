@@ -30,6 +30,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/ci-reuse.mjs decide
 
+  msrv:
+    needs: verify-plan
+    if: needs.verify-plan.outputs.needed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.88
+      - name: Test declared MSRV
+        run: cargo test --all-features --all-targets
+
   rust:
     needs: verify-plan
     if: needs.verify-plan.outputs.needed == 'true'
@@ -43,14 +53,22 @@ jobs:
         run: cargo fmt -- --check
       - name: Test core only
         run: cargo test --no-default-features --all-targets
+      - name: Test default features
+        run: cargo test --all-targets
       - name: Test all features
         run: cargo test --all-features --all-targets
       - name: Clippy
         run: cargo clippy --all-features --all-targets -- -D warnings
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: |
+          cargo generate-lockfile
+          cargo audit
 
   verified-tree:
     name: Record verified PR tree
-    needs: [verify-plan, rust]
+    needs: [verify-plan, msrv, rust]
     if: github.event_name == 'pull_request' && success()
     runs-on: ubuntu-latest
     timeout-minutes: 5

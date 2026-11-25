@@ -20,6 +20,8 @@ pub enum Error {
     NoGatewayFound,
     #[error("gateway returned CoAP status {status} for {path}")]
     GatewayStatus { status: String, path: String },
+    #[error("requested resource {expected} but gateway returned resource {actual}")]
+    ResourceIdMismatch { expected: u32, actual: u32 },
     #[error("{0} must not be empty")]
     EmptyCredential(&'static str),
     #[error("an observe command must be started with an observation API")]

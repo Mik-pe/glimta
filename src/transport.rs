@@ -85,7 +85,10 @@ pub(crate) async fn open_client(
     Ok(client)
 }
 
-pub(crate) async fn execute_on(client: &DtlsClient, command: &Command) -> Result<Vec<u8>> {
+pub(crate) async fn execute_on<T: ClientTransport + 'static>(
+    client: &CoAPClient<T>,
+    command: &Command,
+) -> Result<Vec<u8>> {
     if command.observe {
         return Err(Error::ObserveCommandRequiresSubscription);
     }
@@ -97,6 +100,7 @@ pub(crate) async fn execute_on(client: &DtlsClient, command: &Command) -> Result
     };
     let body = command.body.as_ref().map(serde_json::to_vec).transpose()?;
     let request = RequestBuilder::new(&command.path, method)
+        .token(Some(rand::random::<[u8; 8]>().to_vec()))
         .data(body)
         .confirmable(true)
         .build();
@@ -118,6 +122,44 @@ fn dtls_io_error(error: &dtls::Error) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn delayed_duplicate_cannot_answer_the_next_read() {
+        use coap::request::{MessageClass, MessageType, Packet, Status};
+        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let client = coap::UdpCoAPClient::new(socket.local_addr().unwrap())
+            .await
+            .unwrap();
+        let gateway = tokio::spawn(async move {
+            let mut previous: Option<Box<[u8]>> = None;
+            for value in [11, 22] {
+                let mut buf = [0; 256];
+                let (len, peer) = socket.recv_from(&mut buf).await.unwrap();
+                let request = Packet::from_bytes(&buf[..len]).unwrap();
+                if let Some(ref duplicate) = previous {
+                    socket.send_to(duplicate, peer).await.unwrap();
+                }
+                let mut response = Packet::new();
+                response.header.set_type(MessageType::Acknowledgement);
+                response.header.code = MessageClass::Response(Status::Content);
+                response.header.message_id = request.header.message_id;
+                response.set_token(request.get_token().to_vec());
+                response.payload = vec![value];
+                let bytes = response.to_bytes().unwrap();
+                socket.send_to(&bytes, peer).await.unwrap();
+                previous = Some(bytes.into_boxed_slice());
+            }
+        });
+        for id in [11u8, 22] {
+            assert_eq!(
+                execute_on(&client, &crate::command::get_device(id.into()))
+                    .await
+                    .unwrap(),
+                [id]
+            );
+        }
+        gateway.await.unwrap();
+    }
 
     #[test]
     fn classic_gateway_dtls_config_uses_psk_ccm8() {

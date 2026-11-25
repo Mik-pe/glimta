@@ -241,7 +241,7 @@ impl Client {
 
     pub async fn device(&self, device_id: u32) -> Result<Device> {
         let client = self.open().await?;
-        decode_on(&client, &command::get_device(device_id)).await
+        read_device(&client, device_id).await
     }
 
     /// Fetch all devices while reusing one read-only DTLS session.
@@ -254,7 +254,7 @@ impl Client {
         let ids: Vec<u32> = decode_on(&client, &command::list_devices()).await?;
         let mut devices = Vec::with_capacity(ids.len());
         for id in ids {
-            devices.push(decode_on(&client, &command::get_device(id)).await?);
+            devices.push(read_device(&client, id).await?);
         }
         Ok(devices)
     }
@@ -265,11 +265,7 @@ impl Client {
         let ids: Vec<u32> = decode_on(&client, &command::list_devices()).await?;
         let mut read = BulkRead::with_capacity(ids.len());
         for id in ids {
-            record_resource_result(
-                &mut read,
-                id,
-                decode_on(&client, &command::get_device(id)).await,
-            );
+            record_resource_result(&mut read, id, read_device(&client, id).await);
         }
         Ok(read)
     }
@@ -281,7 +277,7 @@ impl Client {
 
     pub async fn group(&self, group_id: u32) -> Result<Group> {
         let client = self.open().await?;
-        decode_on(&client, &command::get_group(group_id)).await
+        read_group(&client, group_id).await
     }
 
     /// Fetch all groups while reusing one read-only DTLS session.
@@ -293,7 +289,7 @@ impl Client {
         let ids: Vec<u32> = decode_on(&client, &command::list_groups()).await?;
         let mut groups = Vec::with_capacity(ids.len());
         for id in ids {
-            groups.push(decode_on(&client, &command::get_group(id)).await?);
+            groups.push(read_group(&client, id).await?);
         }
         Ok(groups)
     }
@@ -304,11 +300,7 @@ impl Client {
         let ids: Vec<u32> = decode_on(&client, &command::list_groups()).await?;
         let mut read = BulkRead::with_capacity(ids.len());
         for id in ids {
-            record_resource_result(
-                &mut read,
-                id,
-                decode_on(&client, &command::get_group(id)).await,
-            );
+            record_resource_result(&mut read, id, read_group(&client, id).await);
         }
         Ok(read)
     }
@@ -575,6 +567,26 @@ impl Client {
     }
 }
 
+async fn read_device(client: &transport::DtlsClient, id: u32) -> Result<Device> {
+    let device: Device = decode_on(client, &command::get_device(id)).await?;
+    check_resource_id(id, device.id)?;
+    Ok(device)
+}
+
+async fn read_group(client: &transport::DtlsClient, id: u32) -> Result<Group> {
+    let group: Group = decode_on(client, &command::get_group(id)).await?;
+    check_resource_id(id, group.id)?;
+    Ok(group)
+}
+
+fn check_resource_id(expected: u32, actual: u32) -> Result<()> {
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(Error::ResourceIdMismatch { expected, actual })
+    }
+}
+
 fn record_resource_result<T>(read: &mut BulkRead<T>, id: u32, result: Result<T>) {
     match result {
         Ok(item) => read.items.push(item),
@@ -819,6 +831,22 @@ const _: Option<(AirPurifier, Blind, Socket)> = None;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mismatched_resource_is_attributed_to_the_requested_id() {
+        let mut read = BulkRead::with_capacity(2);
+        record_resource_result(&mut read, 12, check_resource_id(12, 13).map(|()| 13));
+        record_resource_result(&mut read, 13, check_resource_id(13, 13).map(|()| 13));
+        assert_eq!(read.items, [13]);
+        assert_eq!(read.failures[0].id, 12);
+        assert!(matches!(
+            read.failures[0].error,
+            Error::ResourceIdMismatch {
+                expected: 12,
+                actual: 13
+            }
+        ));
+    }
 
     #[test]
     fn best_effort_read_keeps_successes_and_failures() {

@@ -198,7 +198,7 @@ cargo run --features cli -- devices \
 
 Glimta uses the CoAP crate without its bundled DTLS feature and supplies a small custom client transport over the maintained `dtls` crate. This keeps CoAP protocol handling independent from the concrete DTLS implementation and avoids pulling the CoAP crate's legacy DTLS dependency graph into Glimta.
 
-Bulk reads reuse a read-only DTLS session. Writes open fresh sessions because classic gateways have historically behaved differently when multiple PUT operations reuse one connection.
+Bulk reads reuse a read-only DTLS session. Each request carries its own CoAP token, and device and group reads check the returned resource ID before accepting the response. Writes open fresh sessions because classic gateways have historically behaved differently when multiple PUT operations reuse one connection.
 
 ## Compatibility references
 

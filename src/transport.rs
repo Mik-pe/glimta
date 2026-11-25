@@ -22,6 +22,19 @@ pub(crate) struct DtlsTransport {
     remote_addr: SocketAddr,
 }
 
+impl Drop for DtlsTransport {
+    fn drop(&mut self) {
+        // The last CoAP transport owner has finished. Tell the peer it can
+        // release this session even when the read was cancelled or timed out.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let conn = Arc::clone(&self.conn);
+            runtime.spawn(async move {
+                let _ = conn.close().await;
+            });
+        }
+    }
+}
+
 #[async_trait]
 impl ClientTransport for DtlsTransport {
     async fn recv(&self, buf: &mut [u8]) -> io::Result<(usize, Option<SocketAddr>)> {
@@ -122,6 +135,32 @@ fn dtls_io_error(error: &dtls::Error) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn dropping_the_last_coap_client_closes_its_dtls_session() {
+        let credentials = Credentials::new("loopback", "session-test-key").unwrap();
+        let server_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let addr = server_socket.local_addr().unwrap();
+        let config = build_dtls_config(&credentials);
+        let server = tokio::spawn(async move {
+            let (_, peer) = server_socket.peek_from(&mut [0; 1]).await.unwrap();
+            server_socket.connect(peer).await.unwrap();
+            let session = DTLSConn::new(Arc::new(server_socket), config, false, None)
+                .await
+                .unwrap();
+            let mut data = [0; 16];
+            session.read(&mut data, Some(Duration::from_secs(4))).await
+        });
+        let client = open_client(addr, &credentials, Duration::from_secs(5), 0)
+            .await
+            .unwrap();
+        drop(client);
+        let result = server.await.unwrap();
+        assert!(
+            matches!(result, Err(dtls::Error::ErrAlertFatalOrClose)),
+            "{result:?}"
+        );
+    }
 
     #[tokio::test]
     async fn delayed_duplicate_cannot_answer_the_next_read() {
